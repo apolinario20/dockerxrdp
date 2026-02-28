@@ -1,19 +1,45 @@
-FROM debian
-RUN dpkg --add-architecture i386
-RUN apt update
-RUN DEBIAN_FRONTEND=noninteractive apt install wine qemu-kvm *zenhei* xz-utils dbus-x11 curl firefox-esr gnome-system-monitor mate-system-monitor  git xfce4 xfce4-terminal tightvncserver wget   -y
-RUN wget https://github.com/novnc/noVNC/archive/refs/tags/v1.2.0.tar.gz
-RUN tar -xvf v1.2.0.tar.gz
-RUN mkdir  $HOME/.vnc
-RUN echo 'admin123@a' | vncpasswd -f > $HOME/.vnc/passwd
-RUN echo '/bin/env  MOZ_FAKE_NO_SANDBOX=1  dbus-launch xfce4-session'  > $HOME/.vnc/xstartup
-RUN chmod 600 $HOME/.vnc/passwd
-RUN chmod 755 $HOME/.vnc/xstartup
-RUN echo 'whoami ' >>/luo.sh
-RUN echo 'cd ' >>/luo.sh
-RUN echo "su -l -c 'vncserver :2000 -geometry 1360x768' "  >>/luo.sh
-RUN echo 'cd /noVNC-1.2.0' >>/luo.sh
-RUN echo './utils/launch.sh  --vnc localhost:7900 --listen 8900 ' >>/luo.sh
-RUN chmod 755 /luo.sh
+FROM debian:stable-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install everything in ONE layer
+RUN dpkg --add-architecture i386 && \
+    apt update && \
+    apt install -y \
+        wine \
+        qemu-kvm \
+        xz-utils \
+        dbus-x11 \
+        curl \
+        firefox-esr \
+        git \
+        xfce4 \
+        xfce4-terminal \
+        tightvncserver \
+        wget && \
+    apt clean && rm -rf /var/lib/apt/lists/*
+
+# Download noVNC
+RUN wget https://github.com/novnc/noVNC/archive/refs/tags/v1.2.0.tar.gz && \
+    tar -xvf v1.2.0.tar.gz && \
+    mv noVNC-1.2.0 /noVNC
+
+# Setup VNC
+RUN mkdir -p /root/.vnc && \
+    echo 'admin123@a' | vncpasswd -f > /root/.vnc/passwd && \
+    chmod 600 /root/.vnc/passwd && \
+    echo '#!/bin/bash\n\
+export MOZ_FAKE_NO_SANDBOX=1\n\
+dbus-launch xfce4-session &' > /root/.vnc/xstartup && \
+    chmod +x /root/.vnc/xstartup
+
+# Startup script
+RUN echo '#!/bin/bash\n\
+vncserver :1 -geometry 1360x768\n\
+cd /noVNC\n\
+./utils/launch.sh --vnc localhost:5901 --listen 8900' > /start.sh && \
+    chmod +x /start.sh
+
 EXPOSE 8900
-CMD  /luo.sh
+
+CMD ["/start.sh"]
